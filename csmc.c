@@ -32,9 +32,10 @@ int* studentTutorMapping = NULL;
 pthread_mutex_t chairsLock;
 pthread_mutex_t queueLock;
 pthread_mutex_t countersLock;
+pthread_mutex_t arrivalLock;
 
 // Semaphores
-sem_t* studentSemaphores = NULL;
+sem_t* studentSemaphores = NULL; // A semaphore per student
 sem_t studentHasArrived;
 sem_t studentIsWaitingForTutor;
 
@@ -216,6 +217,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_init(&countersLock, NULL);
     pthread_mutex_init(&chairsLock, NULL);
     pthread_mutex_init(&queueLock, NULL);
+    pthread_mutex_init(&arrivalLock, NULL);
 
     // Create threads // TODO: Check for memory leaks
     pthread_t coordinatorTid;
@@ -307,7 +309,7 @@ void* studentThreadFunction(void* arg) {
         }
 
         // Student is programming...
-        usleep(2000);
+        usleep(rand() % 2000);
 
         pthread_mutex_lock(&chairsLock);
         if (emptyChairs > 0) { // If there are empty chairs available:
@@ -319,7 +321,9 @@ void* studentThreadFunction(void* arg) {
 
             printf("S: Student %d takes a seat. Empty chairs remaining = %d\n", id, chairsAfter);
 
-            pushArrivalQueue(id); 
+            pthread_mutex_lock(&arrivalLock);
+            pushArrivalQueue(id);
+            pthread_mutex_unlock(&arrivalLock);
             sem_post(&studentHasArrived);
 
             sem_wait(&studentSemaphores[id]);
@@ -356,8 +360,9 @@ void* coordinatorThreadFunction(void* arg) {
         if (shutdownFlag) {
             break;
         }
-
+        pthread_mutex_lock(&arrivalLock);
         int studentId = popArrivalQueue();
+        pthread_mutex_unlock(&arrivalLock);
         if (studentId < 0) { // queue is empty
             continue;
         }
