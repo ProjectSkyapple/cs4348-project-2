@@ -61,22 +61,17 @@ free(arrivalQueue);
 
 //Push the student who just arrived onto the waiting queue
 void pushArrivalQueue(int studentId) {
-   pthread_mutex_lock(&queueLock);
    arrivalQueue[back] = studentId;
    back = (back + 1) % arrivalCapacity;
-   pthread_mutex_unlock(&queueLock);
 }
 //Pops a student from the front of the queue
 int popArrivalQueue() {
-pthread_mutex_lock(&queueLock);
 if (front == back) { //if the queue is empty
- pthread_mutex_unlock(&queueLock);
  return -1;
 }
 
 int studentId = arrivalQueue[front];
 front = (front + 1) % arrivalCapacity;
-pthread_mutex_unlock(&queueLock);
 return studentId;
 }
 
@@ -276,18 +271,6 @@ int main(int argc, char* argv[]) {
     // Cleanup phase
     destroyPriorityQueue();
     destroyArrivalQueue();
-
- 
-    for (int i = 0; i < numStudents; i++) {
-        sem_destroy(&studentSemaphores[i]);
-    }
-
-    sem_destroy(&studentHasArrived);
-    sem_destroy(&studentIsWaitingForTutor);
-
-    pthread_mutex_destroy(&chairsLock);
-    pthread_mutex_destroy(&queueLock);
-    pthread_mutex_destroy(&countersLock);
 
     free(studentThreads);
     free(tutorThreads);
