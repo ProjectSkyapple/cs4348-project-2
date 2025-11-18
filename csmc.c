@@ -1,5 +1,3 @@
-// ****** CS 4348 PROJECT 2 ******
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -43,19 +41,107 @@ sem_t studentIsWaitingForTutor;
 
 int shutdownFlag = 0;
 
-// Priority queue for coordinator
-void initializePriorityQueue(int maxPriority);
-void destroyPriorityQueue();
-void pushPriorityQueue(int studentId, int priority);
-int popPriorityQueue(int* studentId, int* priority);
-int sizePriorityQueue();
+//Queue for student arrival (FIFO)
+int* arrivalQueue = NULL;
+int front = 0; //no one in front of line
+int back = 0; //no one in back of line
+int arrivalCapacity = 0; //# of students
 
-// Arrival queue students will fall into
-void initializeArrivalQueue(int capacity);
-void destroyArrivalQueue();
-void pushArrivalQueue(int studentId);
-int popArrivalQueue();
+void initializeArrivalQueue(int capacity) {
+   arrivalQueue = malloc(sizeof(int) * capacity);
+   front = 0;
+   back = 0;
+   arrivalCapacity = capacity;
+}
 
+
+void destroyArrivalQueue() {
+free(arrivalQueue);
+}
+
+//Push the student who just arrived onto the waiting queue
+void pushArrivalQueue(int studentId) {
+   pthread_mutex_lock(&queueLock);
+   arrivalQueue[back] = studentId;
+   back = (back + 1) % arrivalCapacity;
+   pthread_mutex_unlock(&queueLock);
+}
+//Pops a student from the front of the queue
+int popArrivalQueue() {
+pthread_mutex_lock(&queueLock);
+if (front == back) { //if the queue is empty
+ pthread_mutex_unlock(&queueLock);
+ return -1;
+}
+
+int studentId = arrivalQueue[front];
+front = (front + 1) % arrivalCapacity;
+pthread_mutex_unlock(&queueLock);
+return studentId;
+}
+
+// Priority queue for tutor
+
+typedef struct PriorityNode {
+int studentId;
+int priority; // higher priorty will be seen first
+struct PriorityNode* next;
+} PriorityNode;
+
+PriorityNode* priorityHead = NULL;
+
+void initializePriorityQueue(int maxPriority) {
+(void)maxPriority;
+priorityHead = NULL;
+}
+//
+void destroyPriorityQueue() {
+while (priorityHead != NULL) {
+	PriorityNode* tmp = priorityHead;
+	priorityHead = priorityHead->next;
+	free(tmp);
+	}
+}
+//Pushes student into priority queue based on their priority
+void pushPriorityQueue(int studentId, int priority) {
+  PriorityNode* node = malloc(sizeof(PriorityNode));
+      node->studentId = studentId;
+          node->priority = priority;
+	      node->next = NULL;
+
+//Inserts the student at the head if it is empty or if the student has higher priority
+if (!priorityHead || priority < priorityHead->priority || (priority == priorityHead->priority && studentId)) {
+node->next = priorityHead;
+priorityHead = node;
+return;
+}
+PriorityNode* curr = priorityHead;
+while(curr->next && (curr->next->priority < priority || (curr->next->priority == priority && curr->next->studentId < studentId))) {
+curr = curr->next;
+}
+node->next = curr->next;
+curr->next = node;
+}
+//Removes student from priority queue
+int popPriorityQueue(int* studentId, int* priority) {
+    if (!priorityHead) return 0; //returns 0 if empty
+        PriorityNode* node = priorityHead;
+	priorityHead = priorityHead->next;
+	*studentId = node->studentId;
+	*priority = node->priority;
+	free(node);
+	return 1;
+}
+//Counts the # of students in the priority queue
+int sizePriorityQueue() {
+int count = 0;
+PriorityNode* curr = priorityHead;
+while (curr) {
+	count++;
+	curr = curr->next;
+	}
+	return count;
+}	
 // Thread functions
 void* studentThreadFunction(void* arg);
 void* coordinatorThreadFunction(void* arg);
@@ -191,21 +277,17 @@ int main(int argc, char* argv[]) {
     destroyPriorityQueue();
     destroyArrivalQueue();
 
-    // TODO: Remove these destroy functions
-    /*
+ 
     for (int i = 0; i < numStudents; i++) {
         sem_destroy(&studentSemaphores[i]);
     }
 
     sem_destroy(&studentHasArrived);
     sem_destroy(&studentIsWaitingForTutor);
-    */
 
-    /*
     pthread_mutex_destroy(&chairsLock);
     pthread_mutex_destroy(&queueLock);
     pthread_mutex_destroy(&countersLock);
-    */
 
     free(studentThreads);
     free(tutorThreads);
@@ -300,7 +382,7 @@ void* coordinatorThreadFunction(void* arg) {
         pthread_mutex_unlock(&queueLock);
 
         printf("C: Student %d with priority %d in queue. Waiting students = %d. Total help requested so far = %ld\n",
-            studentId, priority, numStudentsWaitingForTutoring, requestCount); // TODO: Do we need sems/locks here?
+            studentId, priority, numStudentsWaitingForTutoring, requestCount);
 
         sem_post(&studentIsWaitingForTutor);
     }
@@ -351,52 +433,4 @@ void* tutorThreadFunction(void* arg) {
     }
 
     return NULL;
-}
-
-
-// *** PRIORITY QUEUE FUNCTIONS ***
-void initializePriorityQueue(int maxPriority) {
-    (void)maxPriority;
-}
-
-void destroyPriorityQueue() {
-
-}
-
-void pushPriorityQueue(int studentId, int priority) {
-    (void)studentId;
-    (void)priority;
-}
-
-int popPriorityQueue(int* studentId, int* priority) {
-    (void)studentId;
-    (void)priority;
-    // return 1 if success, 0 if empty
-    return 0;
-}
-
-int sizePriorityQueue() {
-    // TODO: return total number of queued students
-    return 0;
-}
-
-
-// *** ARRIVAL QUEUE FUNCTIONS ***
-void initializeArrivalQueue(int capacity) {
-    (void)capacity;
-
-}
-
-void destroyArrivalQueue() {
-
-}
-
-void pushArrivalQueue(int studentId) {
-    (void)studentId;
-
-}
-
-int popArrivalQueue() {
-
-    return -1;
 }
